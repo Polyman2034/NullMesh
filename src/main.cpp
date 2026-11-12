@@ -1,5 +1,6 @@
 #include <iostream>
 #include <winsock2.h>
+#include <cstring>
 
 int main()
 {
@@ -94,6 +95,26 @@ if (bytesReceived > 0)
     buffer[bytesReceived] = '\0';
 
     std::cout << "Client says: " << buffer << '\n';
+    
+const char* response = "Message received by NullMesh!\n";
+
+int bytesSent = send(
+    clientSocket,
+    response,
+    static_cast<int>(strlen(response)),
+    0
+);
+
+if (bytesSent == SOCKET_ERROR)
+{
+    std::cout << "Send failed: "
+              << WSAGetLastError() << '\n';
+}
+else
+{
+    std::cout << "Response sent to client!\n";
+}
+
 }
 else if (bytesReceived == 0)
 {
