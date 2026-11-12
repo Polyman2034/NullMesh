@@ -28,6 +28,26 @@ if (serverSocket == INVALID_SOCKET)
 }
 
 std::cout << "TCP socket created successfully!\n";
+    
+sockaddr_in serverAddress{};
+
+serverAddress.sin_family = AF_INET;
+serverAddress.sin_port = htons(8080);
+serverAddress.sin_addr.s_addr = INADDR_ANY;
+
+if (bind(serverSocket, (sockaddr*)&serverAddress,
+         sizeof(serverAddress)) == SOCKET_ERROR)
+{
+    std::cout << "Bind failed: "
+              << WSAGetLastError() << '\n';
+
+    closesocket(serverSocket);
+    WSACleanup();
+    return 1;
+}
+
+std::cout << "Socket bound to port 8080!\n";
+
 
 closesocket(serverSocket);
 
