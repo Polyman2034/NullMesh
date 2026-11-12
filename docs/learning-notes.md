@@ -178,18 +178,21 @@ A TCP server allows one program to wait for connections and communicate with cli
 
 A basic TCP server performs these operations:
 
-1. Creates a socket.
-2. Gives the socket a local IP address and port.
-3. Prepares the socket to receive connection requests.
-4. Accepts a client's connection.
-5. Receives data from the client.
-6. Processes the data.
-7. Sends a response.
-8. Closes the sockets when finished.
+1. Initializes the networking library when required by the operating system.
+2. Creates a socket.
+3. Gives the socket a local IP address and port.
+4. Prepares the socket to receive connection requests.
+5. Accepts a client's connection.
+6. Receives data from the client.
+7. Processes the data.
+8. Sends a response.
+9. Closes the sockets and releases networking resources.
 
 ## 4. TCP Server Lifecycle
 
-On Windows, a basic TCP server follows this order:
+The networking initialization and cleanup steps differ between Windows and Linux.
+
+**Windows — Winsock:**
 
 ```text
 WSAStartup()
@@ -219,11 +222,37 @@ closesocket()
 WSACleanup()
 ```
 
+**Linux — POSIX sockets:**
+
+```text
+  socket()
+     |
+     v
+   bind()
+     |
+     v
+  listen()
+     |
+     v
+  accept()
+     |
+     v
+   recv()
+     |
+     v
+   send()
+     |
+     v
+   close()
+```
+
+Linux does not require `WSAStartup()` or `WSACleanup()`.
+
 Each function has a different job.
 
 ---
 
-# Part 3: Windows Socket Programming
+# Part 3: Socket Programming on Windows and Linux
 
 ## 1. Winsock
 
@@ -245,7 +274,25 @@ closesocket()
 WSACleanup()
 ```
 
-## 2. WSAStartup()
+## 2. POSIX Sockets
+
+POSIX sockets are the standard socket programming interface commonly used on Linux and other Unix-like systems.
+
+They provide functions such as:
+
+```cpp
+socket()
+bind()
+listen()
+accept()
+recv()
+send()
+close()
+```
+
+**Simple meaning:** Winsock is the Windows socket interface, while POSIX sockets are used on Linux and other Unix-like systems.
+
+## 3. WSAStartup()
 
 Before using Winsock, a Windows program must initialize it.
 
@@ -257,77 +304,163 @@ Example:
 
 ```cpp
 WSADATA wsaData;
-WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+int result = WSAStartup(
+    MAKEWORD(2, 2),
+    &wsaData
+);
 ```
 
-`MAKEWORD(2, 2)` requests Winsock version 2.2.
+- `MAKEWORD(2, 2)` requests Winsock version 2.2.
+- `WSADATA` stores information about the initialized Winsock library.
+- The return value indicates whether initialization succeeded.
 
-`WSADATA` stores information about the initialized Winsock library.
+**Important:** This function is required on Windows, not Linux.
 
-## 3. WSACleanup()
+## 4. WSACleanup()
 
 `WSACleanup()` tells Winsock that the program has finished using it.
 
 **Simple meaning:** Clean up Winsock after networking work is finished.
 
-## 4. SOCKET
+It is used on Windows after the program has finished using its sockets.
 
-`SOCKET` is the Windows data type used to store a socket handle.
+**Important:** Linux does not have this Winsock cleanup step.
 
-Example:
+## 5. SOCKET and File Descriptor
+
+The socket identifier has a different type on each operating system.
+
+**Windows:**
 
 ```cpp
 SOCKET serverSocket;
 ```
 
-Here, `serverSocket` stores the identifier of the socket created by the operating system.
-
-## 5. INVALID_SOCKET
-
-When `socket()` fails to create a socket, it returns `INVALID_SOCKET`.
-
-Example:
+**Linux:**
 
 ```cpp
-if (serverSocket == INVALID_SOCKET)
-{
-    // Socket creation failed
-}
+int serverSocket;
 ```
 
-**Simple meaning:** Check whether the socket was created successfully.
+Windows uses the `SOCKET` type, while Linux represents a socket using an integer file descriptor.
 
-## 6. SOCKET_ERROR
-
-Many Winsock functions return `SOCKET_ERROR` when an operation fails.
-
-For example, `bind()` returns `SOCKET_ERROR` if it cannot bind the socket.
-
-**Simple meaning:** The requested socket operation failed.
-
-## 7. WSAGetLastError()
-
-When a Winsock operation fails, `WSAGetLastError()` gives the error code explaining why it failed.
-
-Example:
+In NullMesh, a common type alias is used to make the code easier to share:
 
 ```cpp
-int error = WSAGetLastError();
+#ifdef _WIN32
+    using Socket = SOCKET;
+#else
+    using Socket = int;
+#endif
 ```
 
-**Simple meaning:** Find out why a Winsock function failed.
+This allows the rest of the code to use `Socket` without repeatedly writing different types.
 
-## 8. closesocket()
+## 6. Invalid Socket
 
-`closesocket()` closes a socket and releases its resources.
+The operating systems use different values to indicate socket creation failure.
 
-Example:
+**Windows:**
+
+```cpp
+INVALID_SOCKET
+```
+
+**Linux:**
+
+```cpp
+-1
+```
+
+NullMesh defines a common invalid socket value:
+
+```cpp
+#ifdef _WIN32
+    #define INVALID_SOCKET_VALUE INVALID_SOCKET
+#else
+    #define INVALID_SOCKET_VALUE (-1)
+#endif
+```
+
+This lets the program check socket creation failure using one common condition.
+
+## 7. Socket Errors
+
+The operating systems also provide different ways to retrieve socket error information.
+
+**Windows:**
+
+```cpp
+WSAGetLastError();
+```
+
+**Linux:**
+
+```cpp
+errno;
+```
+
+In NullMesh, a helper function is used:
+
+```cpp
+#ifdef _WIN32
+    int getSocketError()
+    {
+        return WSAGetLastError();
+    }
+#else
+    int getSocketError()
+    {
+        return errno;
+    }
+#endif
+```
+
+**Simple meaning:** Get the operating system's error code when a socket operation fails.
+
+## 8. Closing a Socket
+
+The function used to close a socket differs between Windows and Linux.
+
+**Windows:**
 
 ```cpp
 closesocket(serverSocket);
 ```
 
-**Remember:** On Windows, use `closesocket()` to close a Winsock socket.
+**Linux:**
+
+```cpp
+close(serverSocket);
+```
+
+NullMesh uses a common helper:
+
+```cpp
+#ifdef _WIN32
+    void closeSocket(Socket socket)
+    {
+        closesocket(socket);
+    }
+#else
+    void closeSocket(Socket socket)
+    {
+        close(socket);
+    }
+#endif
+```
+
+**Remember:**
+
+| Operation | Windows | Linux |
+|---|---|---|
+| Socket type | `SOCKET` | `int` |
+| Invalid socket | `INVALID_SOCKET` | `-1` |
+| Get socket error | `WSAGetLastError()` | `errno` |
+| Close socket | `closesocket()` | `close()` |
+| Initialize networking | `WSAStartup()` | Not required |
+| Cleanup networking | `WSACleanup()` | Not required |
 
 ---
 
@@ -337,12 +470,12 @@ closesocket(serverSocket);
 
 `socket()` asks the operating system to create a new socket.
 
-The operating system creates the socket and gives the program a socket handle.
+The operating system creates the socket and gives the program a socket handle or file descriptor.
 
 Example:
 
 ```cpp
-SOCKET serverSocket = socket(
+Socket serverSocket = socket(
     AF_INET,
     SOCK_STREAM,
     IPPROTO_TCP
@@ -462,7 +595,7 @@ After binding the socket, the server needs to prepare it to receive connection r
 Example:
 
 ```cpp
-SOCKET clientSocket = accept(
+Socket clientSocket = accept(
     serverSocket,
     nullptr,
     nullptr
@@ -498,10 +631,10 @@ Example:
 ```cpp
 char buffer[1024];
 
-int bytesReceived = recv(
+auto bytesReceived = recv(
     clientSocket,
     buffer,
-    sizeof(buffer),
+    sizeof(buffer) - 1,
     0
 );
 ```
@@ -510,16 +643,20 @@ int bytesReceived = recv(
 
 - `clientSocket`: From which connection should data be received?
 - `buffer`: Where should the received data be stored?
-- `sizeof(buffer)`: What is the maximum number of bytes to receive?
+- `sizeof(buffer) - 1`: What is the maximum number of bytes to receive?
 - `0`: No special receive flags.
+
+The extra byte is reserved so the received data can be terminated with `'\0'` when treating it as a C-style string.
 
 ### What does recv() return?
 
 - **Positive number:** Number of bytes received.
 - **0:** The other side has gracefully closed its sending direction.
-- **SOCKET_ERROR:** Something went wrong.
+- **Error value:** Something went wrong.
 
-**Important:** If the buffer can hold 1024 bytes, `recv()` does not have to return all 1024 bytes. It may return fewer.
+The error value is `SOCKET_ERROR` on Windows and `-1` on Linux.
+
+**Important:** If the buffer can hold 1023 bytes, `recv()` does not have to return all 1023 bytes. It may return fewer.
 
 ## 2. send()
 
@@ -530,10 +667,10 @@ Example:
 ```cpp
 const char* message = "Hello Client";
 
-int bytesSent = send(
+auto bytesSent = send(
     clientSocket,
     message,
-    static_cast<int>(strlen(message)),
+    strlen(message),
     0
 );
 ```
@@ -548,7 +685,9 @@ int bytesSent = send(
 ### What does send() return?
 
 - **Positive number:** Number of bytes accepted for sending.
-- **SOCKET_ERROR:** The operation failed.
+- **Error value:** The operation failed.
+
+The error value is `SOCKET_ERROR` on Windows and `-1` on Linux.
 
 **Important:** A successful `send()` does not mean the other program has already received or processed all the data.
 
@@ -610,13 +749,48 @@ Blocking sockets are useful when learning a basic TCP server because the communi
 | Used with `bind()` and `listen()`. | Used with `recv()` and `send()`. |
 | Can accept multiple clients over time. | Represents one particular connection. |
 
+**NullMesh currently:** The server accepts one client, communicates with it, and then closes both sockets. It does not currently loop to accept additional clients.
+
+## 6. MSG_NOSIGNAL on Linux
+
+Linux provides the `MSG_NOSIGNAL` flag for `send()`.
+
+Example:
+
+```cpp
+send(
+    clientSocket,
+    message,
+    strlen(message),
+    MSG_NOSIGNAL
+);
+```
+
+It prevents a `SIGPIPE` signal from being generated when sending to a connection whose other end has been closed.
+
+NullMesh uses this flag in its Linux implementation.
+
+The Windows implementation uses `0` for the send flags.
+
 ---
 
 # Part 6: Closing Connections and Cleaning Up
 
-## 1. closesocket()
+## 1. Closing a Socket
 
-`closesocket()` closes a socket and releases its resources.
+The socket closing function depends on the operating system.
+
+**Windows:**
+
+```cpp
+closesocket(clientSocket);
+```
+
+**Linux:**
+
+```cpp
+close(clientSocket);
+```
 
 A server generally closes the client socket when it has finished communicating with that client.
 
@@ -661,6 +835,11 @@ A normal Windows cleanup order is:
 2. Close the listening socket.
 3. Call `WSACleanup()` after Winsock use is finished.
 
+A normal Linux cleanup order is:
+
+1. Close the connected client socket.
+2. Close the listening socket.
+
 **Why?** To release resources instead of leaving them unnecessarily allocated.
 
 ---
@@ -672,35 +851,34 @@ The following diagram shows how a basic TCP client and server communicate.
 ```text
              SERVER                         CLIENT
 
-          WSAStartup()                  WSAStartup()
-               |                            |
-            socket()                     socket()
-               |                            |
-             bind()                         |
-               |                            |
-            listen()                        |
-               |                         connect()
-               |                            |
-            accept() <----------------------|
-               |
-          TCP Connection
-               |
-             recv() <---------------- Client Data
-               |
-          Process Data
-               |
-             send() ----------------> Server Response
-               |
-          closesocket()               closesocket()
-               |                            |
-        Close Listening Socket              |
-               |                            |
-          WSACleanup()                 WSACleanup()
+        WSAStartup()                    socket()
+             |                             |
+          socket()                      connect()
+             |                             |
+           bind()                          |
+             |                             |
+          listen()                         |
+             |                             |
+          accept() <-----------------------|
+             |
+        TCP Connection
+             |
+           recv() <---------------- Client Data
+             |
+        Process Data
+             |
+           send() ----------------> Server Response
+             |
+       Close Client Socket           Close Client Socket
+             |
+      Close Listening Socket
+             |
+        WSACleanup()
 ```
 
 ### What happens here?
 
-1. Both programs initialize Winsock.
+1. The Windows server initializes Winsock. The Linux server does not need this step.
 2. Both programs create their sockets.
 3. The server assigns its socket a local address and port using `bind()`.
 4. The server calls `listen()` to wait for clients.
@@ -709,11 +887,111 @@ The following diagram shows how a basic TCP client and server communicate.
 7. Both programs now have a TCP connection.
 8. The client and server exchange data using `send()` and `recv()`.
 9. Both programs close their sockets.
-10. Both programs clean up Winsock.
+10. The Windows server calls `WSACleanup()` after finishing its Winsock operations.
 
 ---
 
-# Part 8: Important Definitions
+# Part 8: NullMesh Current TCP Server Architecture
+
+## 1. Platform Support
+
+NullMesh uses C++17 and supports two socket programming interfaces:
+
+- **Windows:** Winsock.
+- **Linux:** POSIX sockets.
+
+The operating-system-specific code is selected using preprocessor conditions:
+
+```cpp
+#ifdef _WIN32
+    // Windows-specific code
+#else
+    // Linux-specific code
+#endif
+```
+
+This allows the same project to use the appropriate socket functions on each platform.
+
+## 2. Current Server Flow
+
+The current NullMesh server follows this flow:
+
+```text
+Initialize Winsock (Windows only)
+             |
+             v
+       Create Socket
+             |
+             v
+       Configure Address
+             |
+             v
+            bind()
+             |
+             v
+           listen()
+             |
+             v
+           accept()
+             |
+             v
+        Receive Data
+             |
+             v
+        Display Data
+             |
+             v
+        Send Response
+             |
+             v
+       Close Client Socket
+             |
+             v
+      Close Server Socket
+             |
+             v
+   Cleanup Winsock (Windows only)
+```
+
+## 3. Current Communication Example
+
+The client sends:
+
+```text
+Hello NullMesh!
+```
+
+The server receives and displays:
+
+```text
+Client says: Hello NullMesh!
+```
+
+The server responds:
+
+```text
+Message received by NullMesh!
+```
+
+## 4. Current Implementation Limitations
+
+The current implementation is a basic learning TCP server.
+
+Its limitations include:
+
+- It accepts one client connection and then finishes.
+- It performs one receive operation.
+- It sends one response.
+- It does not yet handle partial sends in a loop.
+- It does not implement message framing.
+- It uses blocking socket operations.
+- It does not yet support concurrent clients.
+
+These are important distinctions when describing the current implementation. TCP itself supports multiple connections, but this particular server does not yet manage multiple clients.
+
+---
+
+# Part 9: Important Definitions
 
 | Term | Simple Definition |
 |---|---|
@@ -726,6 +1004,7 @@ The following diagram shows how a basic TCP client and server communicate.
 | TCP | A protocol that provides reliable and ordered data communication. |
 | TCP Connection | An established communication relationship between two TCP endpoints. |
 | Winsock | The Windows interface for socket programming. |
+| POSIX Sockets | The socket programming interface used on Linux and other Unix-like systems. |
 | SOCKET | The Windows data type used to identify a socket. |
 | File Descriptor | A number used by Unix-like systems to identify an open resource. |
 | Byte Stream | A continuous flow of bytes. |
@@ -735,3 +1014,14 @@ The following diagram shows how a basic TCP client and server communicate.
 | Backlog | The requested queue size for incoming connections waiting to be accepted. |
 | Loopback Address | An IP address used to communicate with the same computer. |
 | Blocking Operation | An operation that waits until it can make progress, completes, or fails. |
+| Network Byte Order | The standard byte order used for values transmitted over a network. |
+| `htons()` | Converts a 16-bit value from host byte order to network byte order. |
+| `bind()` | Assigns a local address and port to a socket. |
+| `listen()` | Prepares a socket to receive incoming connection requests. |
+| `accept()` | Accepts an incoming connection and returns a new connected socket. |
+| `recv()` | Receives data from a connected socket. |
+| `send()` | Sends data through a connected socket. |
+| `closesocket()` | Closes a Windows socket. |
+| `close()` | Closes a Linux file descriptor, including a socket. |
+| `WSAStartup()` | Initializes Winsock on Windows. |
+| `WSACleanup()` | Cleans up Winsock on Windows. |
