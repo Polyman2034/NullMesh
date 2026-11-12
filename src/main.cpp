@@ -15,6 +15,23 @@ int main()
 
     std::cout << "Winsock initialized successfully!\n";
 
+    
+SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+if (serverSocket == INVALID_SOCKET)
+{
+    std::cout << "Socket creation failed: "
+              << WSAGetLastError() << '\n';
+
+    WSACleanup();
+    return 1;
+}
+
+std::cout << "TCP socket created successfully!\n";
+
+closesocket(serverSocket);
+
+
     WSACleanup();
 
     return 0;
