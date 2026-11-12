@@ -47,6 +47,19 @@ if (bind(serverSocket, (sockaddr*)&serverAddress,
 }
 
 std::cout << "Socket bound to port 8080!\n";
+    
+if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR)
+{
+    std::cout << "Listen failed: "
+              << WSAGetLastError() << '\n';
+
+    closesocket(serverSocket);
+    WSACleanup();
+    return 1;
+}
+
+std::cout << "Server is listening on port 8080!\n";
+
 
 
 closesocket(serverSocket);
