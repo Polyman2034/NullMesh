@@ -59,6 +59,29 @@ if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR)
 }
 
 std::cout << "Server is listening on port 8080!\n";
+sockaddr_in clientAddress{};
+int clientAddressSize = sizeof(clientAddress);
+
+SOCKET clientSocket = accept(
+    serverSocket,
+    (sockaddr*)&clientAddress,
+    &clientAddressSize
+);
+
+if (clientSocket == INVALID_SOCKET)
+{
+    std::cout << "Accept failed: "
+              << WSAGetLastError() << '\n';
+
+    closesocket(serverSocket);
+    WSACleanup();
+    return 1;
+}
+
+std::cout << "Client connected successfully!\n";
+
+closesocket(clientSocket);
+
 
 
 
