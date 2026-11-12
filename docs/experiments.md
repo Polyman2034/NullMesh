@@ -2,7 +2,7 @@
 
 This document records practical experiments performed while building and understanding the NullMesh TCP server.
 
-Each experiment includes its objective, setup, procedure, expected behavior, and observations.
+Each experiment describes its objective, setup, procedure, expected behavior, and actual observations.
 
 ---
 
@@ -15,45 +15,67 @@ Understand how two programs communicate using a TCP connection.
 ## Tools
 
 - Two terminal windows.
-- Netcat (`nc`) or Ncat (`ncat`).
+- TCP client and server programs.
+- Python socket module.
 
 ## Setup
 
-Start a listener in Terminal 1:
+A basic TCP communication experiment was performed using two terminals.
 
-```bash
-ncat -l 8080
-```
-
-Connect to it from Terminal 2:
-
-```bash
-ncat 127.0.0.1 8080
-```
-
-If using a different Netcat version, the listener command may have different syntax.
+The first terminal runs the server, while the second terminal runs a Python client.
 
 ## Procedure
 
-1. Start the listener in the first terminal.
-2. Connect to port `8080` from the second terminal.
-3. Type a message in either terminal.
-4. Observe the message in the other terminal.
-5. Close one side and observe what happens.
+1. Start the TCP server.
+2. Connect to the server using a Python socket client.
+3. Send a message from the client.
+4. Observe the message received by the server.
+5. Observe the response received by the client.
+
+## Test Command
+
+```bash
+python3 -c 'import socket; s=socket.create_connection(("127.0.0.1", 8080)); s.sendall(b"Hello NullMesh!"); print(s.recv(1024).decode()); s.close()'
+```
 
 ## Expected Behavior
 
-- The second terminal establishes a TCP connection with the first.
-- Text entered in one terminal is received by the other.
-- Closing the connection ends communication.
+- The client establishes a TCP connection with the server.
+- The client sends a message.
+- The server receives and displays the message.
+- The server sends a response.
+- The client receives the response.
 
-## Observations
+## Actual Observations
 
-Record the actual output and behavior after running the experiment.
+The experiment was successfully performed in GitHub Codespaces on Linux.
+
+Client message:
+
+```text
+Hello NullMesh!
+```
+
+Server output:
+
+```text
+TCP socket created successfully!
+Socket bound to port 8080!
+Server is listening on port 8080!
+Client connected successfully!
+Client says: Hello NullMesh!
+Response sent to client!
+```
+
+Client response:
+
+```text
+Message received by NullMesh!
+```
 
 ## Conclusion
 
-This experiment demonstrates basic TCP communication between two programs running on the same computer.
+This experiment demonstrated successful TCP communication between two separate programs running on the same computer.
 
 ---
 
@@ -61,9 +83,11 @@ This experiment demonstrates basic TCP communication between two programs runnin
 
 ## Objective
 
-Understand how a C++ application creates a TCP socket using Winsock.
+Understand how a C++ application creates a TCP socket using the operating system's socket API.
 
 ## Functions Used
+
+**Windows:**
 
 ```cpp
 WSAStartup();
@@ -72,31 +96,35 @@ closesocket();
 WSACleanup();
 ```
 
+**Linux:**
+
+```cpp
+socket();
+close();
+```
+
 ## Procedure
 
-1. Initialize Winsock.
-2. Create a socket using `socket()`.
+1. Initialize Winsock on Windows.
+2. Create a TCP socket using `socket()`.
 3. Check whether the returned socket is valid.
 4. Print a success or error message.
-5. Close the socket.
-6. Clean up Winsock.
+5. Close the socket when finished.
+6. Clean up Winsock resources on Windows.
 
-## Expected Behavior
+## Actual Observations
 
-If Winsock initializes successfully and the socket is created successfully, the program should print a success message.
+The complete TCP server successfully created a socket in the Linux Codespaces environment.
 
-## Observations
+Output:
 
-Record:
-
-- Whether `WSAStartup()` succeeded.
-- Whether `socket()` returned a valid socket.
-- Any error codes.
-- Whether cleanup completed successfully.
+```text
+TCP socket created successfully!
+```
 
 ## Conclusion
 
-This experiment demonstrates how an application requests a socket resource from the operating system.
+This experiment demonstrated how an application requests a TCP socket from the operating system.
 
 ---
 
@@ -111,7 +139,6 @@ Understand how a server assigns a local IP address and port to a socket.
 ```cpp
 socket();
 bind();
-closesocket();
 ```
 
 ## Configuration
@@ -130,24 +157,19 @@ Port:           8080
 4. Call `bind()`.
 5. Check the return value.
 
-## Expected Behavior
+## Actual Observations
 
-If the address and port are available and the operation succeeds, the socket becomes associated with that local address and port.
+The server successfully bound its socket to port `8080`.
 
-If the port is already in use or another error occurs, binding may fail.
+Output:
 
-## Observations
-
-Record:
-
-- Whether `bind()` succeeded.
-- The port used.
-- Any error code.
-- What happens when another program tries to bind to the same address and port.
+```text
+Socket bound to port 8080!
+```
 
 ## Conclusion
 
-This experiment demonstrates how a server chooses the local address and port on which it will communicate.
+This experiment demonstrated how a server associates its socket with a local address and port.
 
 ---
 
@@ -166,29 +188,26 @@ listen();
 
 ## Procedure
 
-1. Create a TCP socket.
-2. Bind it to port `8080`.
-3. Call `listen()`.
-4. Check whether the operation succeeded.
-5. Attempt to connect using a TCP client.
+1. Create and bind a TCP socket.
+2. Call `listen()`.
+3. Check whether the operation succeeded.
+4. Attempt to connect using a TCP client.
 
-## Expected Behavior
+## Actual Observations
 
-The socket enters listening mode and becomes ready to accept incoming TCP connections.
+The server successfully entered listening mode.
 
-`listen()` itself does not accept a client.
+Output:
 
-## Observations
+```text
+Server is listening on port 8080!
+```
 
-Record:
-
-- Whether `listen()` succeeded.
-- Whether a client could establish a connection.
-- What happened when no client was connected.
+The server waited for a client connection before continuing to the `accept()` operation.
 
 ## Conclusion
 
-This experiment demonstrates the difference between assigning a local address and preparing a socket to listen for connections.
+This experiment demonstrated the difference between assigning a local address and preparing a socket to listen for connections.
 
 ---
 
@@ -196,7 +215,7 @@ This experiment demonstrates the difference between assigning a local address an
 
 ## Objective
 
-Understand how a server accepts a client's connection.
+Understand how a server accepts a client's TCP connection.
 
 ## Functions Used
 
@@ -207,32 +226,26 @@ accept();
 
 ## Procedure
 
-1. Create and bind a TCP socket.
-2. Put it into listening mode.
-3. Call `accept()`.
-4. Connect a client to the server.
-5. Observe when `accept()` returns.
+1. Start the TCP server.
+2. Allow it to reach the blocking `accept()` operation.
+3. Connect using the Python client.
+4. Observe when `accept()` returns.
 
-## Expected Behavior
+## Actual Observations
 
-Before a client connects, a blocking `accept()` waits.
+The server successfully accepted the Python client's connection.
 
-When a client connects, `accept()` returns a new connected socket.
+Output:
 
-The original listening socket remains available to accept other clients.
+```text
+Client connected successfully!
+```
 
-## Observations
-
-Record:
-
-- Whether `accept()` waited for a client.
-- When it returned.
-- Whether a valid client socket was created.
-- The difference between the listening socket and client socket.
+The server used the newly returned client socket for communication.
 
 ## Conclusion
 
-This experiment demonstrates how a server accepts client connections and obtains a separate socket for communication.
+This experiment demonstrated how a server accepts a client connection and obtains a separate socket for communication.
 
 ---
 
@@ -254,35 +267,28 @@ recv();
 1. Start the TCP server.
 2. Connect a client.
 3. Call `recv()` on the connected client socket.
-4. Send some text from the client.
-5. Display the received bytes.
+4. Send text from the client.
+5. Display the received data.
 
-## Expected Behavior
+## Actual Observations
 
-The server receives available data and stores it in the supplied buffer.
+The Python client sent:
 
-The return value tells the server how many bytes were received.
+```text
+Hello NullMesh!
+```
 
-## Important Return Values
+The server displayed:
 
-| Return Value | Meaning |
-|---|---|
-| Positive number | Number of bytes received. |
-| `0` | The peer has gracefully closed its sending direction. |
-| `SOCKET_ERROR` | The receive operation failed. |
+```text
+Client says: Hello NullMesh!
+```
 
-## Observations
-
-Record:
-
-- The message sent by the client.
-- The number of bytes received.
-- What happened when the client sent a larger message.
-- What happened when the client disconnected.
+The server successfully received and displayed the client's message.
 
 ## Conclusion
 
-This experiment demonstrates how the server receives bytes through a connected TCP socket.
+This experiment demonstrated how the server receives bytes through a connected TCP socket.
 
 ---
 
@@ -303,27 +309,28 @@ send();
 1. Start the TCP server.
 2. Connect a client.
 3. Prepare a response message.
-4. Call `send()` using the connected client socket.
+4. Send the response using the connected client socket.
 5. Observe the received message in the client terminal.
 
-## Expected Behavior
+## Actual Observations
 
-The server passes data to Winsock for sending through the TCP connection.
+The server sent:
 
-The return value indicates how many bytes were accepted for sending.
+```text
+Message received by NullMesh!
+```
 
-## Observations
+The client successfully received and displayed the response.
 
-Record:
+Server output:
 
-- The message sent by the server.
-- The number of bytes reported by `send()`.
-- Whether the client received the message.
-- What happens when the connection is closed.
+```text
+Response sent to client!
+```
 
 ## Conclusion
 
-This experiment demonstrates how a server sends data to a connected client.
+This experiment demonstrated successful data transmission from the server to the client.
 
 ---
 
@@ -331,42 +338,43 @@ This experiment demonstrates how a server sends data to a connected client.
 
 ## Objective
 
-Understand what happens when a TCP connection is closed.
+Understand how sockets are closed after communication.
 
 ## Functions Used
+
+**Windows:**
 
 ```cpp
 closesocket();
 WSACleanup();
 ```
 
+**Linux:**
+
+```cpp
+close();
+```
+
 ## Procedure
 
 1. Start the TCP server.
 2. Connect a client.
-3. Exchange some data.
-4. Close the connected socket.
-5. Observe the behavior of the other endpoint.
-6. Close the listening socket and clean up Winsock.
+3. Exchange data.
+4. Close the client socket.
+5. Close the server's client socket and listening socket.
+6. Perform platform-specific cleanup.
 
-## Expected Behavior
+## Actual Observations
 
-Closing a socket releases its associated resources.
+The Python client completed its communication and closed its socket.
 
-The other endpoint may detect that the peer has closed its sending direction when it calls `recv()` and receives `0`.
+The server closed its client socket and listening socket after processing the connection.
 
-## Observations
-
-Record:
-
-- Which endpoint closed first.
-- What the other endpoint observed.
-- Whether `recv()` returned `0` or an error.
-- Whether the server could accept another client.
+The server process then exited.
 
 ## Conclusion
 
-This experiment demonstrates connection closing and socket resource cleanup.
+This experiment demonstrated socket cleanup after a completed client-server exchange.
 
 ---
 
@@ -378,7 +386,7 @@ Test the complete TCP server lifecycle from socket creation to communication and
 
 ## Procedure
 
-1. Initialize Winsock.
+1. Initialize Winsock on Windows, if applicable.
 2. Create the server socket.
 3. Bind it to an IPv4 address and port.
 4. Start listening.
@@ -388,70 +396,101 @@ Test the complete TCP server lifecycle from socket creation to communication and
 8. Send a response.
 9. Close the connected socket.
 10. Close the listening socket.
-11. Clean up Winsock.
+11. Clean up platform-specific resources.
 
-## Expected Communication
+## Actual Observations
 
-```text
-Client                         NullMesh Server
-   |                                  |
-   |---------- Connect -------------->|
-   |                                  |
-   |---------- Message -------------->|
-   |                                  |
-   |<--------- Response --------------|
-   |                                  |
-   |---------- Disconnect ----------->|
-   |                                  |
-   |           Connection Closed      |
-```
+The complete server was successfully compiled and tested in GitHub Codespaces on Linux.
 
-## Observations
+Client-to-server communication and server-to-client response transmission both worked successfully.
 
-Record:
-
-- Whether the server started successfully.
-- Whether the client connected.
-- Whether data was received correctly.
-- Whether the response reached the client.
-- Whether sockets were closed correctly.
-- Any errors encountered.
+The server handled one client connection and then exited.
 
 ## Conclusion
 
-This experiment tests the complete basic TCP server communication process.
+This experiment verified the basic TCP server lifecycle, including socket creation, binding, listening, accepting, receiving, sending, and cleanup.
+
+---
+
+# Experiment 10: Cross-Platform Build Configuration
+
+## Objective
+
+Prepare NullMesh to use the appropriate socket API on Windows and Linux.
+
+## Technologies Used
+
+- C++17
+- CMake
+- Winsock
+- POSIX sockets
+
+## Implementation
+
+Platform-specific code is selected using the `_WIN32` preprocessor definition.
+
+Windows uses Winsock, while Linux uses POSIX socket headers and functions.
+
+CMake links the Windows Winsock library using:
+
+```cmake
+if(WIN32)
+    target_link_libraries(NullMesh PRIVATE ws2_32)
+endif()
+```
+
+## Actual Observations
+
+The cross-platform implementation successfully compiled in GitHub Codespaces on Linux.
+
+Build command:
+
+```bash
+cmake -S . -B build
+cmake --build build
+```
+
+Result:
+
+```text
+[100%] Built target NullMesh
+```
+
+The Windows version previously compiled, but execution of the locally built executable was blocked by Windows Smart App Control. The new cross-platform implementation has not yet been independently verified through a successful Windows runtime test.
+
+## Conclusion
+
+This experiment established a cross-platform socket abstraction for Windows and Linux, with successful Linux compilation and runtime testing.
 
 ---
 
 # Experiment Results
 
-Use this section to record actual results after running the experiments.
-
 | Experiment | Actual Result |
 |---|---|
-| TCP communication between terminals | Record observation |
-| Socket creation | Record observation |
-| Binding to a port | Record observation |
-| Listening for connections | Record observation |
-| Accepting a client | Record observation |
-| Receiving client data | Record observation |
-| Sending server data | Record observation |
-| Closing a connection | Record observation |
-| Complete TCP server test | Record observation |
+| TCP communication between terminals | Successful using Python client |
+| Socket creation | Successful on Linux |
+| Binding to port 8080 | Successful |
+| Listening for connections | Successful |
+| Accepting a client | Successful |
+| Receiving client data | Successful |
+| Sending server response | Successful |
+| Closing a connection | Completed successfully |
+| Complete TCP server test | Successful on Linux |
+| Cross-platform build configuration | Linux build successful; Windows runtime verification pending |
 
 ---
 
 # Technical Observations
 
-Use this section to record unexpected behavior, errors, debugging findings, and important discoveries made during the experiments.
-
-Examples of useful observations:
-
-- Why a particular Winsock function failed.
-- What happened when a port was already in use.
-- Why `accept()` waited before a client connected.
-- Why `recv()` returned fewer bytes than expected.
-- What happened when a client disconnected.
-- Differences between the listening socket and connected socket.
-
-These observations should describe what actually happened during testing.
+- `socket()` creates the communication endpoint.
+- `bind()` associates the server socket with a local address and port.
+- `listen()` prepares the socket to accept incoming connections.
+- Blocking `accept()` waits until a client connects.
+- `accept()` returns a new socket for communication with the connected client.
+- `recv()` receives bytes from the TCP connection.
+- `send()` transmits bytes through the connected socket.
+- TCP is a byte stream and does not automatically preserve application message boundaries.
+- A successful `send()` does not necessarily mean that the entire message was sent.
+- Windows and Linux use different socket cleanup functions and error-reporting mechanisms.
+- The current implementation handles one client connection before shutting down.
