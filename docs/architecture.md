@@ -2,11 +2,16 @@
 
 ## 1. Project Overview
 
-NullMesh is a TCP server built from scratch using C++ and Windows Sockets (Winsock).
+NullMesh is a TCP server built from scratch using C++17 and operating-system socket APIs.
 
-The main purpose of this project is to understand how network communication works internally and how an application uses the operating system to communicate with other applications.
+The project aims to understand how network communication works internally and how an application uses the operating system to communicate with other applications.
 
-The server accepts client connections, receives data, and sends responses.
+The server creates a TCP socket, binds it to a local port, listens for incoming connections, accepts a client, receives data, and sends a response.
+
+NullMesh currently supports:
+
+- Windows using Winsock.
+- Linux using POSIX sockets.
 
 ## 2. System Architecture
 
@@ -20,23 +25,29 @@ NullMesh follows a basic client-server architecture.
 +------------------+          +----------------------+
                                       |
                                       |
-                               +-------------+
-                               |   Winsock   |
-                               +-------------+
+                             +-------------------+
+                             | Socket API Layer  |
+                             +-------------------+
                                       |
-                                      |
-                               +-------------+
-                               |  Windows OS |
-                               +-------------+
+                         +------------+------------+
+                         |                         |
+                         v                         v
+                  +-------------+           +-------------+
+                  |   Winsock   |           | POSIX       |
+                  |   Windows  |           | Linux       |
+                  +-------------+           +-------------+
 ```
 
 ### How it works
 
-1. The client requests a TCP connection.
-2. NullMesh accepts the connection.
-3. The client and server exchange data.
-4. The server processes the received data.
-5. The server sends a response to the client.
+1. The server initializes its networking environment where required.
+2. The server creates a TCP socket.
+3. The socket is bound to a local address and port.
+4. The server starts listening for connections.
+5. A client connects and the server accepts the connection.
+6. The server receives client data.
+7. The server sends a response.
+8. Both sockets are closed and platform-specific resources are cleaned up.
 
 ## 3. Main Components
 
@@ -52,6 +63,8 @@ Its responsibilities are:
 - Receive responses.
 - Close its socket.
 
+A Python socket client is currently used to test communication with the C++ server.
+
 ### 3.2 TCP Server
 
 The TCP server is the main application in NullMesh.
@@ -61,87 +74,103 @@ Its responsibilities are:
 - Create a listening socket.
 - Bind the socket to an IP address and port.
 - Listen for incoming connections.
-- Accept client connections.
+- Accept a client connection.
 - Receive client data.
-- Send responses.
+- Send a response.
 - Close sockets when finished.
 
-### 3.3 Winsock
+### 3.3 Platform Socket APIs
 
-Winsock provides the functions that NullMesh uses for network communication.
+NullMesh uses different socket APIs depending on the operating system.
 
-Examples:
+**Windows — Winsock**
 
-```cpp
-WSAStartup();
-socket();
-bind();
-listen();
-accept();
-recv();
-send();
-closesocket();
-WSACleanup();
-```
+- `WSAStartup()`
+- `socket()`
+- `bind()`
+- `listen()`
+- `accept()`
+- `recv()`
+- `send()`
+- `closesocket()`
+- `WSACleanup()`
 
-### 3.4 Windows Operating System
+**Linux — POSIX sockets**
 
-The Windows operating system manages the socket resources and handles the underlying network operations.
+- `socket()`
+- `bind()`
+- `listen()`
+- `accept()`
+- `recv()`
+- `send()`
+- `close()`
 
-NullMesh uses Winsock to request networking operations from Windows.
+Linux uses `errno` to report socket errors, while Windows uses `WSAGetLastError()` for Winsock errors.
+
+### 3.4 Operating System
+
+The operating system manages socket resources and performs the underlying network operations.
+
+NullMesh requests these operations through the platform's socket API.
 
 ## 4. TCP Server Lifecycle
 
-The server follows this sequence:
+The current server follows this sequence:
 
 ```text
-       WSAStartup()
-             |
-             v
-          socket()
-             |
-             v
-           bind()
-             |
-             v
-          listen()
-             |
-             v
-          accept()
-             |
-             v
-           recv()
-             |
-             v
-       Process Data
-             |
-             v
-           send()
-             |
-             v
-       closesocket()
-             |
-             v
-        WSACleanup()
+          Windows only
+          WSAStartup()
+                |
+                v
+             socket()
+                |
+                v
+              bind()
+                |
+                v
+             listen()
+                |
+                v
+             accept()
+                |
+                v
+              recv()
+                |
+                v
+          Process Data
+                |
+                v
+              send()
+                |
+                v
+       Close Client Socket
+                |
+                v
+      Close Listening Socket
+                |
+                v
+          Windows only
+          WSACleanup()
 ```
 
 ### Function Responsibilities
 
 | Function | Responsibility |
 |---|---|
-| `WSAStartup()` | Initializes Winsock. |
+| `WSAStartup()` | Initializes Winsock on Windows. |
 | `socket()` | Creates a socket. |
 | `bind()` | Assigns a local IP address and port. |
 | `listen()` | Prepares the socket to accept connections. |
 | `accept()` | Accepts a client connection. |
-| `recv()` | Receives client data. |
+| `recv()` | Receives data from the client. |
 | `send()` | Sends data to the client. |
-| `closesocket()` | Closes a socket. |
-| `WSACleanup()` | Cleans up Winsock resources. |
+| `closesocket()` | Closes a socket on Windows. |
+| `close()` | Closes a socket on Linux. |
+| `WSACleanup()` | Cleans up Winsock resources on Windows. |
 
 ## 5. Socket Design
 
-NullMesh uses two different sockets during normal client communication.
+NullMesh uses two sockets during client communication.
 
 ### Listening Socket
 
@@ -171,10 +200,10 @@ This socket is used to communicate with that particular client.
        recv()/send()       |
           |               |
           v               |
-        Client             |
+        Client
 ```
 
-The listening socket stays available to accept other clients.
+**Current implementation:** The server accepts one client connection, communicates with it, and then closes both sockets. The listening socket is not yet reused to accept additional clients.
 
 ## 6. Address Configuration
 
@@ -196,26 +225,26 @@ The server uses:
 - Port `8080` as the listening port.
 - `INADDR_ANY` to listen on all available local IPv4 interfaces.
 
+`htons()` converts the port number into network byte order.
+
 ## 7. Data Communication
 
 NullMesh uses TCP to exchange data between the client and server.
 
-The communication happens through:
+Communication happens through:
 
 - `recv()` to receive bytes.
 - `send()` to send bytes.
 
 TCP provides a continuous stream of bytes. It does not automatically separate data into application messages.
 
-The application must decide how to identify message boundaries.
+The current implementation performs one receive operation and one send operation. It does not yet handle partial transfers or implement application-level message framing.
 
 ## 8. Error Handling
 
-Network operations can fail.
+Network operations can fail. NullMesh checks the return values of important socket functions.
 
-NullMesh should check the return value of each important Winsock function.
-
-Examples:
+### Windows
 
 | Function | Failure indication |
 |---|---|
@@ -227,31 +256,51 @@ Examples:
 | `recv()` | `SOCKET_ERROR` |
 | `send()` | `SOCKET_ERROR` |
 
-On Windows, `WSAGetLastError()` helps identify the reason for a failed Winsock operation.
+`WSAGetLastError()` provides the error code for failed Winsock operations.
+
+### Linux
+
+| Function | Failure indication |
+|---|---|
+| `socket()` | `-1` |
+| `bind()` | `-1` |
+| `listen()` | `-1` |
+| `accept()` | `-1` |
+| `recv()` | `-1` |
+| `send()` | `-1` |
+
+Linux socket errors are reported through `errno`.
 
 ## 9. Resource Management
 
 Sockets use resources managed by the operating system.
 
-NullMesh must close sockets when they are no longer needed.
+NullMesh closes sockets when they are no longer needed.
 
-The normal cleanup sequence is:
+The cleanup sequence is:
 
 1. Close the connected client socket.
 2. Close the listening socket.
-3. Call `WSACleanup()` after Winsock use is finished.
+3. Call `WSACleanup()` on Windows after Winsock use is finished.
+
+Linux uses `close()` instead of `closesocket()` and does not require `WSACleanup()`.
 
 ## 10. Current Architecture Scope
 
-The current architecture focuses on a basic TCP server using blocking Winsock operations.
+The current architecture focuses on a basic, blocking TCP server.
 
 It covers:
 
 - IPv4 TCP socket creation.
+- Cross-platform socket handling.
 - Local address and port binding.
 - Listening for client connections.
-- Accepting a client.
+- Accepting one client.
 - Receiving and sending data.
-- Closing sockets and cleaning up Winsock resources.
+- Closing sockets and cleaning up resources.
+
+The implementation has been compiled and tested in GitHub Codespaces on Linux using a Python socket client.
 
 The architecture is intentionally kept simple so the underlying TCP communication process is easy to understand.
+
+Future improvements include multiple-client handling, reliable data transmission, and HTTP request handling.
