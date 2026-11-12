@@ -79,6 +79,32 @@ if (clientSocket == INVALID_SOCKET)
 }
 
 std::cout << "Client connected successfully!\n";
+    
+char buffer[1024];
+
+int bytesReceived = recv(
+    clientSocket,
+    buffer,
+    sizeof(buffer) - 1,
+    0
+);
+
+if (bytesReceived > 0)
+{
+    buffer[bytesReceived] = '\0';
+
+    std::cout << "Client says: " << buffer << '\n';
+}
+else if (bytesReceived == 0)
+{
+    std::cout << "Client disconnected.\n";
+}
+else
+{
+    std::cout << "Receive failed: "
+              << WSAGetLastError() << '\n';
+}
+
 
 closesocket(clientSocket);
 
