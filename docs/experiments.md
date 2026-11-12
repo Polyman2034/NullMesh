@@ -443,7 +443,7 @@ endif()
 
 The cross-platform implementation successfully compiled in GitHub Codespaces on Linux.
 
-Build command:
+Build commands:
 
 ```bash
 cmake -S . -B build
@@ -494,3 +494,19 @@ This experiment established a cross-platform socket abstraction for Windows and 
 - A successful `send()` does not necessarily mean that the entire message was sent.
 - Windows and Linux use different socket cleanup functions and error-reporting mechanisms.
 - The current implementation handles one client connection before shutting down.
+
+---
+
+# Test Evidence
+
+## 1. Server Terminal
+
+The server successfully created a TCP socket, bound to port 8080, listened for a client, received its message, and sent a response.
+
+![NullMesh TCP Server Test](screenshots/stage-1-server-test.png)
+
+## 2. Client Terminal
+
+The Python client successfully connected to NullMesh, sent a message, and received the server response.
+
+![NullMesh TCP Client Test](screenshots/stage-1-client-test.png)
